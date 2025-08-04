@@ -1,0 +1,227 @@
+package com.importantnotification;
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.telephony.TelephonyManager;
+import android.media.AudioManager;
+import android.util.Log;
+import android.app.NotificationManager;
+import android.app.NotificationChannel;
+import android.app.Notification;
+import android.os.Build;
+import android.os.Handler;
+import androidx.core.app.NotificationCompat;
+import android.media.ToneGenerator;
+
+import java.util.Set;
+import java.util.HashSet;
+
+public class PhoneStateReceiver extends BroadcastReceiver {
+    private static final String TAG = "PhoneStateReceiver";
+    private static final String CHANNEL_ID = "important_calls";
+    private static final int NOTIFICATION_ID = 1001;
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String state = intent.getStringExtra(TelephonyManager.EXTRA_STATE);
+        String phoneNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER);
+        
+        Log.d(TAG, "Phone state changed: " + state + ", Number: " + phoneNumber);
+        
+        if (TelephonyManager.EXTRA_STATE_RINGING.equals(state)) {
+            handleIncomingCall(context, phoneNumber);
+        } else if (TelephonyManager.EXTRA_STATE_IDLE.equals(state)) {
+            handleCallEnded(context);
+        }
+    }
+    
+    private void handleIncomingCall(Context context, String phoneNumber) {
+        if (phoneNumber == null) return;
+        
+        // Clean the phone number (remove formatting)
+        String cleanNumber = cleanPhoneNumber(phoneNumber);
+        Log.d(TAG, "Incoming call from: " + cleanNumber);
+        
+        // Check if this is an important contact
+        if (isImportantContact(context, cleanNumber)) {
+            Log.d(TAG, "Important contact calling! Overriding silent mode.");
+            overrideSilentMode(context, cleanNumber);
+        }
+    }
+    
+    private void playCallAlertSound(Context context) {
+        try {
+            // Use ToneGenerator to play tone through STREAM_MUSIC
+            ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME);
+            
+            // Play multiple beeps for call alert - different pattern than SMS
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 1000); // Longer first beep for calls
+            
+            Handler handler = new Handler();
+            // Second beep after short pause
+            handler.postDelayed(() -> {
+                try {
+                    toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 1000);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error playing second call beep", e);
+                }
+            }, 1200);
+            
+            // Third beep 
+            handler.postDelayed(() -> {
+                try {
+                    toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 1000);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error playing third call beep", e);
+                }
+            }, 2400);
+            
+            // Clean up after all beeps are done
+            handler.postDelayed(() -> {
+                toneGenerator.release();
+            }, 4000);
+            
+            Log.d(TAG, "Playing call alert triple tone through media volume");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error playing call alert tone", e);
+        }
+    }
+    
+    private void handleCallEnded(Context context) {
+        // Call ended - no special handling needed with new approach
+        Log.d(TAG, "Call ended");
+    }
+    
+    private boolean isImportantContact(Context context, String phoneNumber) {
+        SharedPreferences prefs = context.getSharedPreferences("ImportantContacts", Context.MODE_PRIVATE);
+        Set<String> importantContacts = prefs.getStringSet("important_contacts", new HashSet<>());
+        
+        Log.d(TAG, "Checking if " + phoneNumber + " is in important contacts: " + importantContacts);
+        
+        // Check if the caller number matches any important contact
+        for (String contact : importantContacts) {
+            // Contact format is "Name|PhoneNumber"
+            if (contact.contains("|")) {
+                String storedNumber = contact.split("\\|")[1];
+                Log.d(TAG, "Comparing " + phoneNumber + " with stored " + storedNumber);
+                
+                if (phoneNumber != null && storedNumber != null) {
+                    // Clean both numbers for comparison
+                    String cleanIncoming = cleanPhoneNumber(phoneNumber);
+                    String cleanStored = cleanPhoneNumber(storedNumber);
+                    
+                    // Check various number formats
+                    if (cleanIncoming.equals(cleanStored) ||
+                        cleanIncoming.endsWith(cleanStored.replaceAll("^\\+?1", "")) ||
+                        cleanStored.endsWith(cleanIncoming.replaceAll("^\\+?1", ""))) {
+                        Log.d(TAG, "Match found! " + contact);
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        Log.d(TAG, "No match found for " + phoneNumber);
+        return false;
+    }
+    
+    private void overrideSilentMode(Context context, String phoneNumber) {
+        AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        
+        // Check if phone is in silent or vibrate mode
+        int currentRingerMode = audioManager.getRingerMode();
+        int currentNotificationVolume = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION);
+        int currentMediaVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+        
+        Log.d(TAG, "Current ringer mode: " + currentRingerMode + ", notification volume: " + currentNotificationVolume + ", media volume: " + currentMediaVolume);
+        
+        // Store original settings
+        final int originalNotificationVolume = currentNotificationVolume;
+        final int originalMediaVolume = currentMediaVolume;
+        final int originalRingerMode = currentRingerMode;
+        
+        // If notification volume is 0, boost media volume for call alert
+        if (currentNotificationVolume == 0) {
+            try {
+                // Boost media volume for playing call alert sound
+                int maxMediaVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                int alertVolume = Math.max(maxMediaVolume * 4 / 5, 3); // Use 4/5 of max volume, minimum of 3
+                
+                Log.d(TAG, "Boosting media volume from " + currentMediaVolume + " to " + alertVolume + " for call alert");
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, alertVolume, 0);
+                
+                // Schedule volume restoration
+                Handler handler = new Handler();
+                handler.postDelayed(() -> {
+                    try {
+                        Log.d(TAG, "Restoring media volume to " + originalMediaVolume);
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, originalMediaVolume, 0);
+                        
+                        // Ensure ringer mode hasn't changed
+                        if (audioManager.getRingerMode() != originalRingerMode) {
+                            Log.d(TAG, "Correcting ringer mode back to " + originalRingerMode);
+                            audioManager.setRingerMode(originalRingerMode);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error restoring audio settings", e);
+                    }
+                }, 10000); // Restore after 10 seconds
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error setting volume: " + e.getMessage());
+            }
+        }
+        
+        // Create high-priority notification 
+        showImportantCallNotification(context, phoneNumber);
+        
+        // Play call alert sound using media stream
+        playCallAlertSound(context);
+        
+        Log.d(TAG, "Important call alert created");
+    }
+    
+    private void showImportantCallNotification(Context context, String phoneNumber) {
+        NotificationManager notificationManager = 
+            (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        
+        // Create notification channel for Android 8.0+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "Important Calls",
+                NotificationManager.IMPORTANCE_MAX  // Maximum importance
+            );
+            channel.setDescription("Notifications for calls from important contacts");
+            channel.enableLights(true);
+            channel.enableVibration(true);
+            channel.setBypassDnd(true); // Bypass Do Not Disturb
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            notificationManager.createNotificationChannel(channel);
+        }
+        
+        // Create high-priority notification
+        Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("📞 Important Call: " + phoneNumber)
+            .setContentText("Silent mode overridden for incoming call")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(true)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setFullScreenIntent(null, true)  // Try to show as heads-up
+            .build();
+        
+        notificationManager.notify(NOTIFICATION_ID, notification);
+    }
+    
+    private String cleanPhoneNumber(String phoneNumber) {
+        if (phoneNumber == null) return "";
+        // Remove all non-digit characters except +
+        return phoneNumber.replaceAll("[^+\\d]", "");
+    }
+}
