@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/church_mode_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Church Mode Schedules"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
+        android:layout_gravity="center_horizontal"
+        android:paddingBottom="16dp" />
+
+    <!-- List of schedules -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/schedule_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingBottom="16dp" />
+
+    <!-- Add Schedule Button -->
+    <Button
+        android:id="@+id/add_schedule_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Add Schedule"
+        android:backgroundTint="@color/colorPrimary"
+        android:textColor="@android:color/white" />
+
+</LinearLayout>

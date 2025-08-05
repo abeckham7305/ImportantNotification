@@ -15,38 +15,7 @@
         android:gravity="center"
         android:layout_marginBottom="24dp" />
 
-    <!-- Service Status -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="16dp">
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Service Status:"
-            android:textSize="16sp" />
-
-        <TextView
-            android:id="@+id/service_status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Stopped"
-            android:textSize="16sp"
-            android:textColor="#FF5722" />
-
-    </LinearLayout>
-
-    <!-- Service Toggle Button -->
-    <Button
-        android:id="@+id/toggle_service_btn"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Start Service"
-        android:textSize="18sp"
-        android:layout_marginBottom="24dp" />
+    <!-- ...existing code... -->
 
     <!-- Important Contacts Section -->
     <TextView
@@ -88,5 +57,53 @@
         android:textColor="#666666"
         android:gravity="center"
         android:layout_marginTop="16dp" />
+
+    <!-- Service Status (moved below contacts) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Service Status:"
+            android:textSize="16sp" />
+        <TextView
+            android:id="@+id/service_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Stopped"
+            android:textSize="16sp"
+            android:textColor="#FF5722" />
+    </LinearLayout>
+
+    <!-- Service Toggle Button (moved below contacts) -->
+    <Button
+        android:id="@+id/toggle_service_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start Service"
+        android:textSize="18sp"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Church Mode Button -->
+    <Button
+        android:id="@+id/church_mode_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Church Mode Options"
+        android:textSize="16sp"
+        android:layout_marginTop="16dp" />
+
+    <!-- Settings Button (remains at bottom) -->
+    <Button
+        android:id="@+id/settings_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="⚙️ Settings"
+        android:textSize="16sp"
+        android:layout_marginTop="8dp" />
 
 </LinearLayout>

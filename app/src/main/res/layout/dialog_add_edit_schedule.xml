@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <EditText
+            android:id="@+id/schedule_name_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Schedule Name"
+            android:inputType="textPersonName"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Days of Week"
+            android:paddingTop="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="4dp">
+            <CheckBox android:id="@+id/day_sun" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sun" />
+            <CheckBox android:id="@+id/day_mon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Mon" />
+            <CheckBox android:id="@+id/day_tue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tue" />
+            <CheckBox android:id="@+id/day_wed" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Wed" />
+            <CheckBox android:id="@+id/day_thu" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Thu" />
+            <CheckBox android:id="@+id/day_fri" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fri" />
+            <CheckBox android:id="@+id/day_sat" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sat" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start Time"
+            android:paddingTop="12dp" />
+        <TimePicker
+            android:id="@+id/start_time_picker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:timePickerMode="spinner" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="End Time"
+            android:paddingTop="12dp" />
+        <TimePicker
+            android:id="@+id/end_time_picker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:timePickerMode="spinner" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Recurrence"
+            android:paddingTop="12dp" />
+        <Spinner
+            android:id="@+id/recurrence_spinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:entries="@array/recurrence_options" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end"
+            android:paddingTop="20dp">
+            <Button
+                android:id="@+id/save_schedule_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Save" />
+            <Button
+                android:id="@+id/cancel_schedule_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cancel"
+                android:layout_marginStart="12dp" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

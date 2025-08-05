@@ -17,6 +17,8 @@ import androidx.core.app.NotificationCompat;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.media.ToneGenerator;
+import android.provider.ContactsContract;
+import android.database.Cursor;
 
 import java.util.Set;
 import java.util.HashSet;
@@ -108,6 +110,21 @@ public class SmsReceiver extends BroadcastReceiver {
     }
     
     private void handleImportantSms(Context context, String phoneNumber, String messageBody) {
+        // Check if service is enabled
+        if (!AppSettings.isServiceEnabled(context)) {
+            Log.d(TAG, "Service disabled in settings, skipping SMS alert");
+            return;
+        }
+        
+        // Check if Church Mode is active
+        if (ChurchModeUtils.isChurchModeActive(context)) {
+            Log.d(TAG, "Church Mode is active - suppressing notification for SMS from " + phoneNumber);
+            return;
+        }
+        
+        // Get the contact name for display
+        String contactName = getContactNameFromNumber(context, phoneNumber);
+        
         AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         
         // Check if phone is in silent or vibrate mode
@@ -125,14 +142,22 @@ public class SmsReceiver extends BroadcastReceiver {
         // If notification volume is 0, boost media volume instead to avoid ringer mode changes
         if (currentNotificationVolume == 0) {
             try {
-                // Boost media volume for playing notification sound - use higher volume for better audibility
+                // Use settings-based volume calculation
                 int maxMediaVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                int alertVolume = Math.max(maxMediaVolume * 4 / 5, 3); // Use 4/5 of max volume, minimum of 3
+                int alertVolume = AppSettings.calculateAlertVolume(context, maxMediaVolume);
                 
-                Log.d(TAG, "Boosting media volume from " + currentMediaVolume + " to " + alertVolume + " to avoid ringer mode changes");
+                Log.d(TAG, "Boosting media volume from " + currentMediaVolume + " to " + alertVolume + " based on user settings");
                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, alertVolume, 0);
                 
-                // Schedule volume restoration
+                // Calculate when all beeps will be finished
+                int beepCount = AppSettings.getBeepCount(context);
+                int beepInterval = AppSettings.getSmsInterval(context);
+                int totalBeepTime = beepCount * beepInterval + 400; // Add beep duration
+                int volumeRestoreDelay = totalBeepTime + 3000; // 3 seconds after beeps end
+                
+                Log.d(TAG, "Will restore volume in " + volumeRestoreDelay + "ms (after " + beepCount + " beeps finish)");
+                
+                // Schedule volume restoration after beeps complete
                 Handler handler = new Handler();
                 handler.postDelayed(() -> {
                     try {
@@ -147,7 +172,7 @@ public class SmsReceiver extends BroadcastReceiver {
                     } catch (Exception e) {
                         Log.e(TAG, "Error restoring audio settings", e);
                     }
-                }, 10000); // Restore after 10 seconds
+                }, volumeRestoreDelay);
                 
             } catch (Exception e) {
                 Log.e(TAG, "Error setting volume: " + e.getMessage());
@@ -156,15 +181,15 @@ public class SmsReceiver extends BroadcastReceiver {
         }
         
         // Create high-priority notification with sound
-        showImportantSmsNotification(context, phoneNumber, messageBody);
+        showImportantSmsNotification(context, contactName, messageBody);
         
         // Play notification sound using media stream
         playNotificationSoundWithMediaVolume(context);
         
-        Log.d(TAG, "Important SMS alert created");
+        Log.d(TAG, "Important SMS alert created for " + contactName);
     }
     
-    private void showImportantSmsNotification(Context context, String phoneNumber, String messageBody) {
+    private void showImportantSmsNotification(Context context, String contactName, String messageBody) {
         NotificationManager notificationManager = 
             (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         
@@ -201,7 +226,7 @@ public class SmsReceiver extends BroadcastReceiver {
         // Create extremely high-priority notification
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("🚨 Important SMS: " + phoneNumber)
+            .setContentTitle("🚨 Important SMS: " + contactName)
             .setContentText(displayMessage)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(displayMessage))
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -231,31 +256,44 @@ public class SmsReceiver extends BroadcastReceiver {
     
     private void playNotificationSoundWithMediaVolume(Context context) {
         try {
+            // TODO: FUTURE ENHANCEMENT - Add ability to stop beeping when:
+            // 1. SMS notification is acknowledged/dismissed
+            // 2. User interacts with the notification
+            // 3. User opens the SMS app
+            // This will require tracking active beep sequences and implementing cancellation mechanism
+            
             // Use ToneGenerator to play tone through STREAM_MUSIC
             ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME);
             
             Handler handler = new Handler();
             
-            // Play 15 beeps with 500ms intervals for SMS alerts
-            for (int i = 0; i < 15; i++) {
+            // Get user settings for SMS alerts
+            int beepCount = AppSettings.getBeepCount(context);
+            int beepInterval = AppSettings.getSmsInterval(context);
+            
+            // Use fixed beep duration (a beep is a beep!)
+            final int BEEP_DURATION = 400; // Original SMS beep duration
+            
+            Log.d(TAG, "Playing " + beepCount + " SMS beeps (400ms duration, " + beepInterval + "ms intervals)");
+            
+            // Play beeps with user-configured settings
+            for (int i = 0; i < beepCount; i++) {
                 final int beepNumber = i + 1;
                 handler.postDelayed(() -> {
                     try {
-                        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 400); // Shorter beeps to fit more
-                        Log.d(TAG, "Playing SMS beep " + beepNumber + " of 15");
+                        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION);
+                        Log.d(TAG, "Playing SMS beep " + beepNumber + " of " + beepCount);
                     } catch (Exception e) {
                         Log.e(TAG, "Error playing SMS beep " + beepNumber, e);
                     }
-                }, i * 500); // 500ms intervals between beeps
+                }, i * beepInterval);
             }
             
-            // Clean up after all beeps are done (15 beeps * 500ms + extra time for last beep)
+            // Clean up after all beeps are done
             handler.postDelayed(() -> {
                 toneGenerator.release();
-                Log.d(TAG, "SMS alert sequence complete - 15 beeps finished");
-            }, 15 * 500 + 1000);
-            
-            Log.d(TAG, "Playing 15-beep SMS alert sequence through media volume");
+                Log.d(TAG, "SMS alert sequence complete - " + beepCount + " beeps finished");
+            }, beepCount * beepInterval + 1000);
             
         } catch (Exception e) {
             Log.e(TAG, "Error playing notification tone with media volume", e);
@@ -267,5 +305,48 @@ public class SmsReceiver extends BroadcastReceiver {
     private String cleanPhoneNumber(String phoneNumber) {
         if (phoneNumber == null) return "";
         return phoneNumber.replaceAll("[^+\\d]", "");
+    }
+    
+    /**
+     * Get the contact name for a phone number from the device's contacts
+     */
+    private String getContactNameFromNumber(Context context, String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
+            Log.d(TAG, "Contact lookup: phone number is null or empty");
+            return "Unknown Contact";
+        }
+        
+        Log.d(TAG, "Looking up contact name for: " + phoneNumber);
+        
+        try {
+            Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, 
+                                          Uri.encode(phoneNumber));
+            Log.d(TAG, "Contact lookup URI: " + uri.toString());
+            
+            Cursor cursor = context.getContentResolver().query(uri, 
+                new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME}, 
+                null, null, null);
+                
+            if (cursor != null) {
+                Log.d(TAG, "Contact query returned " + cursor.getCount() + " results");
+                if (cursor.moveToFirst()) {
+                    String name = cursor.getString(0);
+                    cursor.close();
+                    Log.d(TAG, "Found contact name: " + name);
+                    return (name != null && !name.trim().isEmpty()) ? name : phoneNumber;
+                }
+                cursor.close();
+                Log.d(TAG, "No contact found for number: " + phoneNumber);
+            } else {
+                Log.d(TAG, "Contact query returned null cursor");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error looking up contact name: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        // Return the phone number if we can't find a contact name
+        Log.d(TAG, "Returning phone number as fallback: " + phoneNumber);
+        return phoneNumber;
     }
 }
