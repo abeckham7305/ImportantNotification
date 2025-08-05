@@ -246,7 +246,9 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private boolean hasPhonePermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED &&
+               ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED &&
+               ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_NUMBERS) == PackageManager.PERMISSION_GRANTED;
     }
     
     private boolean hasSmsPermission() {
@@ -272,7 +274,10 @@ public class MainActivity extends AppCompatActivity {
         String[] permissions = {
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.READ_PHONE_NUMBERS,
             Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.READ_SMS,
             Manifest.permission.MODIFY_AUDIO_SETTINGS,
             Manifest.permission.ACCESS_NOTIFICATION_POLICY
         };

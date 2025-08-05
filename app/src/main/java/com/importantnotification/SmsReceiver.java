@@ -234,34 +234,28 @@ public class SmsReceiver extends BroadcastReceiver {
             // Use ToneGenerator to play tone through STREAM_MUSIC
             ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME);
             
-            // Play multiple beeps for more noticeable alert
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 800); // First beep
-            
             Handler handler = new Handler();
-            // Second beep after short pause
-            handler.postDelayed(() -> {
-                try {
-                    toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 800);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error playing second beep", e);
-                }
-            }, 1000);
             
-            // Third beep for even more attention
-            handler.postDelayed(() -> {
-                try {
-                    toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 800);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error playing third beep", e);
-                }
-            }, 2000);
+            // Play 15 beeps with 500ms intervals for SMS alerts
+            for (int i = 0; i < 15; i++) {
+                final int beepNumber = i + 1;
+                handler.postDelayed(() -> {
+                    try {
+                        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 400); // Shorter beeps to fit more
+                        Log.d(TAG, "Playing SMS beep " + beepNumber + " of 15");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error playing SMS beep " + beepNumber, e);
+                    }
+                }, i * 500); // 500ms intervals between beeps
+            }
             
-            // Clean up after all beeps are done
+            // Clean up after all beeps are done (15 beeps * 500ms + extra time for last beep)
             handler.postDelayed(() -> {
                 toneGenerator.release();
-            }, 3500);
+                Log.d(TAG, "SMS alert sequence complete - 15 beeps finished");
+            }, 15 * 500 + 1000);
             
-            Log.d(TAG, "Playing triple notification tone through media volume");
+            Log.d(TAG, "Playing 15-beep SMS alert sequence through media volume");
             
         } catch (Exception e) {
             Log.e(TAG, "Error playing notification tone with media volume", e);

@@ -31,10 +31,25 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         Log.d(TAG, "Phone state changed: " + state + ", Number: " + phoneNumber);
         
         if (TelephonyManager.EXTRA_STATE_RINGING.equals(state)) {
-            handleIncomingCall(context, phoneNumber);
+            if (phoneNumber == null) {
+                Log.w(TAG, "Phone number is null - this may be due to Android privacy restrictions on API 28+");
+                Log.d(TAG, "Checking if app has READ_CALL_LOG permission to access caller ID");
+                
+                // Even if we can't get the number, we can still show an alert for any incoming call
+                // and let the user decide. For now, let's log this and not trigger false alerts.
+                handleIncomingCallWithoutNumber(context);
+            } else {
+                handleIncomingCall(context, phoneNumber);
+            }
         } else if (TelephonyManager.EXTRA_STATE_IDLE.equals(state)) {
             handleCallEnded(context);
         }
+    }
+    
+    private void handleIncomingCallWithoutNumber(Context context) {
+        Log.d(TAG, "Incoming call detected but caller ID is hidden or restricted");
+        // For now, we won't trigger alerts for calls without caller ID to avoid false positives
+        // In the future, we could implement a setting to allow alerts for all incoming calls
     }
     
     private void handleIncomingCall(Context context, String phoneNumber) {
@@ -56,34 +71,28 @@ public class PhoneStateReceiver extends BroadcastReceiver {
             // Use ToneGenerator to play tone through STREAM_MUSIC
             ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME);
             
-            // Play multiple beeps for call alert - different pattern than SMS
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 1000); // Longer first beep for calls
-            
             Handler handler = new Handler();
-            // Second beep after short pause
-            handler.postDelayed(() -> {
-                try {
-                    toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 1000);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error playing second call beep", e);
-                }
-            }, 1200);
             
-            // Third beep 
-            handler.postDelayed(() -> {
-                try {
-                    toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 1000);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error playing third call beep", e);
-                }
-            }, 2400);
+            // Play 15 beeps with 600ms intervals for call alerts (slightly different timing than SMS)
+            for (int i = 0; i < 15; i++) {
+                final int beepNumber = i + 1;
+                handler.postDelayed(() -> {
+                    try {
+                        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 500); // Slightly longer beeps for calls
+                        Log.d(TAG, "Playing call beep " + beepNumber + " of 15");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error playing call beep " + beepNumber, e);
+                    }
+                }, i * 600); // 600ms intervals between beeps for calls
+            }
             
-            // Clean up after all beeps are done
+            // Clean up after all beeps are done (15 beeps * 600ms + extra time for last beep)
             handler.postDelayed(() -> {
                 toneGenerator.release();
-            }, 4000);
+                Log.d(TAG, "Call alert sequence complete - 15 beeps finished");
+            }, 15 * 600 + 1000);
             
-            Log.d(TAG, "Playing call alert triple tone through media volume");
+            Log.d(TAG, "Playing 15-beep call alert sequence through media volume");
             
         } catch (Exception e) {
             Log.e(TAG, "Error playing call alert tone", e);
