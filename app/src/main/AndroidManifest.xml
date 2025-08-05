@@ -36,6 +36,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Settings Activity -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="Settings"
+            android:parentActivityName=".MainActivity" />
+
+        <!-- Church Mode Activity -->
+        <activity
+            android:name=".churchmode.ChurchModeActivity"
+            android:exported="false"
+            android:label="Church Mode"
+            android:parentActivityName=".MainActivity" />
+
         <!-- Background Service (we'll implement this next) -->
         <service
             android:name=".ImportantContactsService"

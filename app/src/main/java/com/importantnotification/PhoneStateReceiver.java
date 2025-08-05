@@ -14,6 +14,9 @@ import android.os.Build;
 import android.os.Handler;
 import androidx.core.app.NotificationCompat;
 import android.media.ToneGenerator;
+import android.provider.ContactsContract;
+import android.database.Cursor;
+import android.net.Uri;
 
 import java.util.Set;
 import java.util.HashSet;
@@ -68,31 +71,45 @@ public class PhoneStateReceiver extends BroadcastReceiver {
     
     private void playCallAlertSound(Context context) {
         try {
+            // TODO: FUTURE ENHANCEMENT - Add ability to stop beeping when:
+            // 1. Call is answered by user
+            // 2. Call is declined/ended
+            // 3. Call notification is acknowledged/dismissed
+            // This will require tracking active beep sequences and implementing cancellation mechanism
+            // Consider using TelephonyManager.CALL_STATE_OFFHOOK to detect call answered
+            
             // Use ToneGenerator to play tone through STREAM_MUSIC
             ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME);
             
             Handler handler = new Handler();
             
-            // Play 15 beeps with 600ms intervals for call alerts (slightly different timing than SMS)
-            for (int i = 0; i < 15; i++) {
+            // Get user settings for call alerts
+            int beepCount = AppSettings.getBeepCount(context);
+            int beepInterval = AppSettings.getCallInterval(context);
+            
+            // Use fixed beep duration (a beep is a beep!)
+            final int BEEP_DURATION = 500; // Original call beep duration
+            
+            Log.d(TAG, "Playing " + beepCount + " call beeps (500ms duration, " + beepInterval + "ms intervals)");
+            
+            // Play beeps with user-configured settings
+            for (int i = 0; i < beepCount; i++) {
                 final int beepNumber = i + 1;
                 handler.postDelayed(() -> {
                     try {
-                        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 500); // Slightly longer beeps for calls
-                        Log.d(TAG, "Playing call beep " + beepNumber + " of 15");
+                        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION);
+                        Log.d(TAG, "Playing call beep " + beepNumber + " of " + beepCount);
                     } catch (Exception e) {
                         Log.e(TAG, "Error playing call beep " + beepNumber, e);
                     }
-                }, i * 600); // 600ms intervals between beeps for calls
+                }, i * beepInterval);
             }
             
-            // Clean up after all beeps are done (15 beeps * 600ms + extra time for last beep)
+            // Clean up after all beeps are done
             handler.postDelayed(() -> {
                 toneGenerator.release();
-                Log.d(TAG, "Call alert sequence complete - 15 beeps finished");
-            }, 15 * 600 + 1000);
-            
-            Log.d(TAG, "Playing 15-beep call alert sequence through media volume");
+                Log.d(TAG, "Call alert sequence complete - " + beepCount + " beeps finished");
+            }, beepCount * beepInterval + 1000);
             
         } catch (Exception e) {
             Log.e(TAG, "Error playing call alert tone", e);
@@ -138,6 +155,18 @@ public class PhoneStateReceiver extends BroadcastReceiver {
     }
     
     private void overrideSilentMode(Context context, String phoneNumber) {
+        // Check if service is enabled
+        if (!AppSettings.isServiceEnabled(context)) {
+            Log.d(TAG, "Service disabled in settings, skipping call alert");
+            return;
+        }
+        
+        // Check if Church Mode is active
+        if (ChurchModeUtils.isChurchModeActive(context)) {
+            Log.d(TAG, "Church Mode is active - suppressing notification for call from " + phoneNumber);
+            return;
+        }
+        
         AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         
         // Check if phone is in silent or vibrate mode
@@ -155,14 +184,22 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         // If notification volume is 0, boost media volume for call alert
         if (currentNotificationVolume == 0) {
             try {
-                // Boost media volume for playing call alert sound
+                // Use settings-based volume calculation
                 int maxMediaVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                int alertVolume = Math.max(maxMediaVolume * 4 / 5, 3); // Use 4/5 of max volume, minimum of 3
+                int alertVolume = AppSettings.calculateAlertVolume(context, maxMediaVolume);
                 
                 Log.d(TAG, "Boosting media volume from " + currentMediaVolume + " to " + alertVolume + " for call alert");
                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, alertVolume, 0);
                 
-                // Schedule volume restoration
+                // Calculate when all beeps will be finished
+                int beepCount = AppSettings.getBeepCount(context);
+                int beepInterval = AppSettings.getCallInterval(context);
+                int totalBeepTime = beepCount * beepInterval + 500; // Add beep duration
+                int volumeRestoreDelay = totalBeepTime + 3000; // 3 seconds after beeps end
+                
+                Log.d(TAG, "Will restore volume in " + volumeRestoreDelay + "ms (after " + beepCount + " beeps finish)");
+                
+                // Schedule volume restoration after beeps complete
                 Handler handler = new Handler();
                 handler.postDelayed(() -> {
                     try {
@@ -177,7 +214,7 @@ public class PhoneStateReceiver extends BroadcastReceiver {
                     } catch (Exception e) {
                         Log.e(TAG, "Error restoring audio settings", e);
                     }
-                }, 10000); // Restore after 10 seconds
+                }, volumeRestoreDelay);
                 
             } catch (Exception e) {
                 Log.e(TAG, "Error setting volume: " + e.getMessage());
@@ -185,15 +222,16 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         }
         
         // Create high-priority notification 
-        showImportantCallNotification(context, phoneNumber);
+        String contactName = getContactNameFromNumber(context, phoneNumber);
+        showImportantCallNotification(context, contactName);
         
         // Play call alert sound using media stream
         playCallAlertSound(context);
         
-        Log.d(TAG, "Important call alert created");
+        Log.d(TAG, "Important call alert created for " + contactName);
     }
     
-    private void showImportantCallNotification(Context context, String phoneNumber) {
+    private void showImportantCallNotification(Context context, String contactName) {
         NotificationManager notificationManager = 
             (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         
@@ -215,7 +253,7 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         // Create high-priority notification
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("📞 Important Call: " + phoneNumber)
+            .setContentTitle("📞 Important Call: " + contactName)
             .setContentText("Silent mode overridden for incoming call")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -232,5 +270,48 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         if (phoneNumber == null) return "";
         // Remove all non-digit characters except +
         return phoneNumber.replaceAll("[^+\\d]", "");
+    }
+    
+    /**
+     * Get the contact name for a phone number from the device's contacts
+     */
+    private String getContactNameFromNumber(Context context, String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
+            Log.d(TAG, "Contact lookup: phone number is null or empty");
+            return "Unknown Contact";
+        }
+        
+        Log.d(TAG, "Looking up contact name for: " + phoneNumber);
+        
+        try {
+            Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, 
+                                          Uri.encode(phoneNumber));
+            Log.d(TAG, "Contact lookup URI: " + uri.toString());
+            
+            Cursor cursor = context.getContentResolver().query(uri, 
+                new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME}, 
+                null, null, null);
+                
+            if (cursor != null) {
+                Log.d(TAG, "Contact query returned " + cursor.getCount() + " results");
+                if (cursor.moveToFirst()) {
+                    String name = cursor.getString(0);
+                    cursor.close();
+                    Log.d(TAG, "Found contact name: " + name);
+                    return (name != null && !name.trim().isEmpty()) ? name : phoneNumber;
+                }
+                cursor.close();
+                Log.d(TAG, "No contact found for number: " + phoneNumber);
+            } else {
+                Log.d(TAG, "Contact query returned null cursor");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error looking up contact name: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        // Return the phone number if we can't find a contact name
+        Log.d(TAG, "Returning phone number as fallback: " + phoneNumber);
+        return phoneNumber;
     }
 }

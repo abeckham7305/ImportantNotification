@@ -30,6 +30,8 @@ public class MainActivity extends AppCompatActivity {
     
     private Button toggleServiceBtn;
     private Button addContactBtn;
+    private Button settingsBtn;
+    private Button churchModeBtn;
     private TextView serviceStatus;
     private LinearLayout contactsList;
     private SharedPreferences prefs;
@@ -45,8 +47,10 @@ public class MainActivity extends AppCompatActivity {
         // Initialize views
         toggleServiceBtn = findViewById(R.id.toggle_service_btn);
         addContactBtn = findViewById(R.id.add_contact_btn);
+        settingsBtn = findViewById(R.id.settings_btn);
         serviceStatus = findViewById(R.id.service_status);
         contactsList = findViewById(R.id.contacts_list);
+        churchModeBtn = findViewById(R.id.church_mode_btn);
         
         // Initialize SharedPreferences
         prefs = getSharedPreferences("ImportantContacts", MODE_PRIVATE);
@@ -81,6 +85,13 @@ public class MainActivity extends AppCompatActivity {
     private void setupButtonListeners() {
         toggleServiceBtn.setOnClickListener(v -> toggleService());
         addContactBtn.setOnClickListener(v -> openContactPicker());
+        settingsBtn.setOnClickListener(v -> openSettings());
+        churchModeBtn.setOnClickListener(v -> openChurchMode());
+    }
+
+    private void openChurchMode() {
+        Intent intent = new Intent(MainActivity.this, com.importantnotification.churchmode.ChurchModeActivity.class);
+        startActivity(intent);
     }
     
     private void toggleService() {
@@ -113,6 +124,11 @@ public class MainActivity extends AppCompatActivity {
         
         Intent intent = new Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI);
         contactPickerLauncher.launch(intent);
+    }
+    
+    private void openSettings() {
+        Intent intent = new Intent(this, SettingsActivity.class);
+        startActivity(intent);
     }
     
     private void handleContactSelection(Intent data) {
